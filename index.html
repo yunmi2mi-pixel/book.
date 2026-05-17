@@ -229,7 +229,7 @@
     document.getElementById(`panel-${status}`).classList.add('active');
     document.getElementById(`tab-btn-${status}`).classList.add('active');
 
-    if(status === 'form') {
+    if(status === 'form' && !document.getElementById('edit-id').value) {
       document.getElementById('book-form').reset();
       document.getElementById('edit-id').value = '';
       document.getElementById('form-cover-url').value = '';
@@ -282,7 +282,7 @@
       });
   }
 
-  // 📂 내 기기의 이미지 파일을 읽어서 등록하는 함수
+  // 내 기기의 이미지 파일을 읽어서 등록하는 함수 📂
   function uploadBookCover(input) {
     if (input.files && input.files[0]) {
       const reader = new FileReader();
@@ -399,6 +399,45 @@
     document.getElementById('progress-text').innerText = progressPercent >= 100 ? '🌳 축하합니다! 울창한 독서 나무 완성!' : `🌱 독서 나무 가꾸기 (${countRead}/10)`;
   }
 
+  // ✏️ 완독된 책 정보를 수정 폼으로 보내는 연동 함수
+  function editBook(id) {
+    const book = books.find(b => b.id == id);
+    if(!book) return;
+
+    // 상세 보기 모달 팝업 닫기
+    document.getElementById('stat-modal').classList.remove('active');
+    
+    // 폼 탭으로 강제 이동
+    switchTab('form');
+    
+    // 각 값 바인딩
+    document.getElementById('edit-id').value = book.id;
+    document.getElementById('form-status').value = book.status;
+    document.getElementById('form-title').value = book.title;
+    document.getElementById('form-author').value = book.author || '';
+    document.getElementById('form-start-date').value = book.startDate || '';
+    document.getElementById('form-read-date').value = book.readDate || '';
+    document.getElementById('form-quote').value = book.quote || '';
+    document.getElementById('form-review').value = book.review || '';
+    document.getElementById('form-cover-url').value = book.coverUrl || '';
+
+    if(book.coverUrl) {
+      document.getElementById('cover-preview').src = book.coverUrl;
+      document.getElementById('cover-preview-container').style.display = 'flex';
+    } else {
+      document.getElementById('cover-preview-container').style.display = 'none';
+    }
+
+    if(book.aiSummary) {
+      document.getElementById('ai-summary-text').innerText = book.aiSummary;
+      document.getElementById('ai-summary-container').style.display = 'block';
+    } else {
+      document.getElementById('ai-summary-container').style.display = 'none';
+    }
+
+    toggleFormFields();
+  }
+
   function startReading(id) {
     const book = books.find(b => b.id == id);
     if(book) {
@@ -478,6 +517,9 @@
       };
       books.push(newBook);
     }
+    
+    // 저장 후 ID 초기화 리셋 처리
+    document.getElementById('edit-id').value = '';
     saveData();
     switchTab(status);
   }
@@ -563,11 +605,12 @@
     body.innerHTML = `
       <div style="display:flex; gap:15px; margin-bottom:15px; align-items:center; background:#fff; padding:12px; border-radius:10px; border:1px solid var(--mint);">
         ${book.coverUrl ? `<img src="${book.coverUrl}" style="width:60px; border-radius:4px; box-shadow:0 2px 5px rgba(0,0,0,0.1);">` : `<div style="font-size:35px;">📗</div>`}
-        <div>
+        <div style="flex-grow: 1;">
           <h2 style="color:var(--forest-dark); font-size:16px; margin-bottom:4px;">${book.title}</h2>
           <p style="font-size:13px; color:#666;">✍️ 저자: ${book.author || '미상'}</p>
           <p style="font-size:12px; color:var(--forest-light);">📅 완독일: ${book.readDate || '-'}</p>
         </div>
+        <button class="btn btn-primary" onclick="editBook('${book.id}')" style="background:var(--forest-dark); padding: 8px 10px;">✏️ 수정</button>
       </div>
       <div class="review-detail-box">
         <div class="review-section-title">✨ 감명 깊었던 말</div>
