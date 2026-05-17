@@ -175,7 +175,6 @@
     if (localData) {
       books = JSON.parse(localData);
       
-      // 기존 구버전 데이터(isWish 기반 등)가 유실되지 않도록 보정
       books.forEach(book => {
         if (!book.status) {
           if (book.isWish) {
@@ -217,7 +216,6 @@
     document.querySelector('.id-review-field').style.display = status === 'read' ? 'block' : 'none';
   }
 
-  // 각 리스트 그리기
   function renderAll() {
     loadData();
     
@@ -230,7 +228,7 @@
     gridWish.innerHTML = '';
 
     let countRead = 0, countReading = 0, countWish = 0, countQuotes = 0;
-    const thisMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+    const thisMonth = new Date().toISOString().slice(0, 7);
     let countMonth = 0;
 
     books.forEach(book => {
@@ -278,23 +276,19 @@
       }
     });
 
-    // 배지 개수 갱신
     document.getElementById('tab-btn-read').innerHTML = `📗 완독한 책 <span style="font-size:11px; opacity:0.8;">(${countRead})</span>`;
     document.getElementById('tab-btn-reading').innerHTML = `🌱 읽는 중 <span style="font-size:11px; opacity:0.8;">(${countReading})</span>`;
     document.getElementById('tab-btn-wish').innerHTML = `💚 읽고 싶은 책 <span style="font-size:11px; opacity:0.8;">(${countWish})</span>`;
 
-    // 상단 통계 판넬 갱신
     document.getElementById('stat-total').innerText = `${countRead}권`;
     document.getElementById('stat-month').innerText = `${countMonth}권`;
     document.getElementById('stat-quotes').innerText = `${countQuotes}개`;
 
-    // 새싹 성장 바 (목표 10권 기준)
     const progressPercent = Math.min((countRead / 10) * 100, 100);
     document.getElementById('progress-fill').style.width = `${progressPercent}%`;
     document.getElementById('progress-text').innerText = progressPercent >= 100 ? '🌳 축하합니다! 울창한 독서 나무 완성!' : `🌱 독서 나무 가꾸기 (${countRead}/10)`;
   }
 
-  // 기능: 읽기 시작 (오늘 날짜 자동 입력)
   function startReading(id) {
     const book = books.find(b => b.id == id);
     if(book) {
@@ -304,7 +298,6 @@
     }
   }
 
-  // 기능: 읽는 중 -> 완독 양식으로 연결
   function moveToReadForm(id) {
     const book = books.find(b => b.id == id);
     if(book) {
@@ -318,7 +311,6 @@
     }
   }
 
-  // 저장 처리
   function saveBook(e) {
     e.preventDefault();
     const id = document.getElementById('edit-id').value;
@@ -330,7 +322,6 @@
     const review = document.getElementById('form-review').value;
 
     if(id) {
-      // 기존 읽던 책을 완독 처리하거나 수정할 때
       const book = books.find(b => b.id == id);
       if(book) {
         book.status = status;
@@ -341,7 +332,6 @@
         book.review = review;
       }
     } else {
-      // 신규 등록
       const newBook = {
         id: Date.now() + Math.random(),
         status: status,
@@ -365,7 +355,6 @@
     }
   }
 
-  // 아늑한 크림색 모달창 내부 내용 제어 기능 📊
   function openStatModal(type) {
     const modal = document.getElementById('stat-modal');
     const title = document.getElementById('modal-title');
@@ -411,7 +400,7 @@
       } else {
         quoteBooks.forEach(b => {
           body.innerHTML += `
-            <div class="modal-list-item" onclick="viewBookDetail('${b.id}')" style="cursor:pointer;">
+            <div class="modal-list-item" onclick="viewBookDetail('${b.id}')">
               <div style="font-style:italic; color:var(--text-dark); font-weight:500;">" ${b.quote} "</div>
               <div style="font-size:11px; text-align:right; color:var(--forest-light); margin-top:6px;">— 《 ${b.title} 》</div>
             </div>`;
@@ -420,7 +409,6 @@
     }
   }
 
-  // 특정 책을 눌렀을 때 나타나는 상세 독후감 팝업 기능 📝
   function viewBookDetail(id) {
     const book = books.find(b => b.id == id);
     if(!book) return;
@@ -447,7 +435,6 @@
         <p style="font-size:14px; margin-top:5px; white-space:pre-wrap; line-height:1.6;">${book.review || '작성된 내용이 없습니다.'}</p>
       </div>
       <button class="btn btn-secondary" style="width:100%; margin-top:15px;" onclick="renderAll(); document.getElementById('stat-modal').classList.remove('active');">닫기</button>
-    </script>
     `;
   }
 
@@ -457,7 +444,6 @@
     }
   }
 
-  // 첫 실행 실행
   window.onload = function() {
     renderAll();
   };
