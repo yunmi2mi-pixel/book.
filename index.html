@@ -39,6 +39,11 @@
     .tab-btn { background: #fff; border: 1px solid var(--mint); padding: 10px 15px; border-radius: 20px; cursor: pointer; color: var(--forest-light); font-weight: bold; white-space: nowrap; }
     .tab-btn.active { background: var(--forest-dark); color: #fff; border-color: var(--forest-dark); }
 
+    /* 정렬 바 */
+    .sort-container { display: flex; gap: 8px; margin-bottom: 15px; justify-content: flex-end; }
+    .sort-btn { padding: 4px 10px; border-radius: 6px; border: 1px solid var(--mint); background: #fff; font-size: 12px; cursor: pointer; color: var(--forest-light); font-weight: bold; }
+    .sort-btn.active { background: var(--forest-light); color: #fff; }
+
     /* 패널 및 리스트 */
     .panel { display: none; }
     .panel.active { display: block; }
@@ -121,7 +126,14 @@
     <button class="tab-btn" onclick="switchTab('trash')" id="tab-btn-trash">🗑️ 휴지통</button>
   </div>
 
-  <div class="panel active" id="panel-read"><div class="books-grid" id="grid-read"></div></div>
+  <div class="panel active" id="panel-read">
+    <div class="sort-container">
+      <button class="sort-btn active" id="sort-date-btn" onclick="setSortOrder('date')">📅 최신 완독일순</button>
+      <button class="sort-btn" id="sort-rating-btn" onclick="setSortOrder('rating')">⭐ 별점 높은순</button>
+    </div>
+    <div class="books-grid" id="grid-read"></div>
+  </div>
+  
   <div class="panel" id="panel-reading"><div class="books-grid" id="grid-reading"></div></div>
   <div class="panel" id="panel-wish"><div class="books-grid" id="grid-wish"></div></div>
   <div class="panel" id="panel-trash"><div class="books-grid" id="grid-trash"></div></div>
@@ -159,6 +171,23 @@
       <div class="form-group">
         <label>✍️ 저자</label>
         <input type="text" id="form-author">
+      </div>
+
+      <div class="form-group id-rating-field">
+        <label>⭐ 책 별점 평가</label>
+        <select id="form-rating">
+          <option value="5.0">⭐⭐⭐⭐⭐ (5.0점)</option>
+          <option value="4.5">⭐⭐⭐⭐💫 (4.5점)</option>
+          <option value="4.0">⭐⭐⭐⭐ (4.0점)</option>
+          <option value="3.5">⭐⭐⭐💫 (3.5점)</option>
+          <option value="3.0">⭐⭐⭐ (3.0점)</option>
+          <option value="2.5">⭐⭐💫 (2.5점)</option>
+          <option value="2.0">⭐⭐ (2.0점)</option>
+          <option value="1.5">⭐💫 (1.5점)</option>
+          <option value="1.0">⭐ (1.0점)</option>
+          <option value="0.5">💫 (0.5점)</option>
+          <option value="0.0">❌ 별점 없음 (0.0점)</option>
+        </select>
       </div>
 
       <div class="form-group id-start-date">
@@ -209,6 +238,7 @@
 <script>
   let books = [];
   let trashBooks = [];
+  let currentSortOrder = 'date'; // 기본값은 최신 날짜순 정렬
 
   function loadData() {
     const localData = localStorage.getItem('books');
@@ -217,6 +247,7 @@
       books.forEach(book => {
         if (!book.status) book.status = book.isWish ? 'wish' : 'read';
         if (!book.id) book.id = Date.now() + Math.random();
+        if (book.rating === undefined) book.rating = "0.0"; // 별점 기본값 세팅
       });
     } else {
       books = [];
@@ -263,6 +294,14 @@
     }
   }
 
+  function setSortOrder(order) {
+    currentSortOrder = order;
+    document.querySelectorAll('.sort-btn').forEach(btn => btn.classList.remove('active'));
+    if(order === 'date') document.getElementById('sort-date-btn').classList.add('active');
+    if(order === 'rating') document.getElementById('sort-rating-btn').classList.add('active');
+    renderAll();
+  }
+
   function switchTab(status) {
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -276,6 +315,7 @@
       document.getElementById('form-cover-url').value = '';
       document.getElementById('cover-preview-container').style.display = 'none';
       document.getElementById('ai-summary-container').style.display = 'none';
+      document.getElementById('form-rating').value = "5.0";
       
       const savedKey = localStorage.getItem('gemini_api_key');
       if(savedKey) document.getElementById('ai-api-key').value = savedKey;
@@ -286,6 +326,7 @@
 
   function toggleFormFields() {
     const status = document.getElementById('form-status').value;
+    document.querySelector('.id-rating-field').style.display = status === 'read' ? 'block' : 'none';
     document.querySelector('.id-start-date').style.display = (status === 'reading' || status === 'read') ? 'block' : 'none';
     document.querySelector('.id-read-date').style.display = status === 'read' ? 'block' : 'none';
     document.querySelector('.id-quote-field').style.display = status === 'read' ? 'block' : 'none';
@@ -338,7 +379,7 @@
     }
   }
 
-  // 🤖 실제 구글 제미나이 AI 서버와 연동되는 요약 함수 (v1 보완 버전)
+  // 🤖 AI 요약 함수 (구글 보안 브라우저 차단 우회 및 v1 버전 통합 완료)
   async function generateAIReviewSummary() {
     const apiKey = document.getElementById('ai-api-key').value.trim();
     const reviewText = document.getElementById('form-review').value.trim();
@@ -360,10 +401,10 @@
     summaryText.innerText = '🤖 AI가 독후감을 분석하여 맞춤 요약 노트를 작성하고 있습니다...⏳';
 
     try {
-      // 404 에러 방지를 위해 정식 v1 주소로 변경 🛠️
-      const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      const targetUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
       
-      const response = await fetch(url, {
+      const response = await fetch(proxyUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -387,8 +428,18 @@
       }
     } catch (err) {
       console.error(err);
-      summaryText.innerText = `❌ 요약에 실패했습니다.\n사유: ${err.message}\nAPI 키가 정확한지 다시 확인하거나 잠시 후 다시 시도해 주세요.`;
+      summaryText.innerText = `❌ 요약에 실패했습니다.\n사유: ${err.message}\n인터넷 속도나 API 키의 정확성을 재확인해 주세요.`;
     }
+  }
+
+  // 숫자를 별모양 글자로 교환해 주는 도구 함수
+  function getStarsStr(ratingStr) {
+    const val = parseFloat(ratingStr) || 0;
+    let fullStars = Math.floor(val);
+    let halfStar = val % 1 !== 0;
+    let stars = '⭐'.repeat(fullStars);
+    if(halfStar) stars += '💫';
+    return stars || '❌ 별점없음';
   }
 
   function renderAll() {
@@ -408,32 +459,51 @@
     const thisMonth = new Date().toISOString().slice(0, 7);
     let countMonth = 0;
 
+    // 🗂️ 사용자가 선택한 방식에 맞춰 완독 도서 정렬 분기 처리
+    let readBooksList = books.filter(b => b.status === 'read');
+    if(currentSortOrder === 'date') {
+      // 최신 완독일 순 정렬 (날짜 문자열 내림차순 역순 정렬)
+      readBooksList.sort((a, b) => (b.readDate || '').localeCompare(a.readDate || ''));
+    } else if(currentSortOrder === 'rating') {
+      // 별점 높은 순 정렬 (실수 값 비교 정렬)
+      readBooksList.sort((a, b) => parseFloat(b.rating || 0) - parseFloat(a.rating || 0));
+    }
+
+    // 1. 완독 리스트 출력
+    readBooksList.forEach(book => {
+      countRead++;
+      if (book.readDate && book.readDate.startsWith(thisMonth)) countMonth++;
+      if (book.quote && book.quote.trim() !== '') countQuotes++;
+
+      const card = document.createElement('div');
+      card.className = 'book-card';
+      const coverSrc = book.coverUrl ? `<img class="book-cover-img" src="${book.coverUrl}" alt="표지">` : `<div class="book-cover-img" style="background:#eef3ed; display:flex; align-items:center; justify-content:center; font-size:24px;">📗</div>`;
+      let periodInfo = book.startDate && book.readDate ? `<br>🌱 기간: ${book.startDate} ~ ${book.readDate}` : `<br>📅 완독일: ${book.readDate || '기록없음'}`;
+
+      card.innerHTML = `
+        ${coverSrc}
+        <div class="book-content">
+          <div class="book-title">${book.title}</div>
+          <div style="font-size: 12px; color: #e67e22; font-weight: bold;">${getStarsStr(book.rating)} (${book.rating}점)</div>
+          <div class="book-info">✍️ ${book.author || '미상'}${periodInfo}</div>
+          <div class="card-actions">
+            <button class="btn btn-secondary" onclick="viewBookDetail('${book.id}')">📝 독후감 보기</button>
+            <button class="btn btn-danger" onclick="moveToTrash('${book.id}')">지우기</button>
+          </div>
+        </div>
+      `;
+      gridRead.appendChild(card);
+    });
+
+    // 2. 다른 카테고리 도서 카운트 및 출력
     books.forEach(book => {
+      if (book.status === 'read') return; // 위에서 이미 처리함
+
       const card = document.createElement('div');
       card.className = 'book-card';
       const coverSrc = book.coverUrl ? `<img class="book-cover-img" src="${book.coverUrl}" alt="표지">` : `<div class="book-cover-img" style="background:#eef3ed; display:flex; align-items:center; justify-content:center; font-size:24px;">📗</div>`;
 
-      if (book.status === 'read') {
-        countRead++;
-        if (book.readDate && book.readDate.startsWith(thisMonth)) countMonth++;
-        if (book.quote && book.quote.trim() !== '') countQuotes++;
-
-        let periodInfo = book.startDate && book.readDate ? `<br>🌱 기간: ${book.startDate} ~ ${book.readDate}` : `<br>📅 완독일: ${book.readDate || '기록없음'}`;
-
-        card.innerHTML = `
-          ${coverSrc}
-          <div class="book-content">
-            <div class="book-title">${book.title}</div>
-            <div class="book-info">✍️ ${book.author || '미상'}${periodInfo}</div>
-            <div class="card-actions">
-              <button class="btn btn-secondary" onclick="viewBookDetail('${book.id}')">📝 독후감 보기</button>
-              <button class="btn btn-danger" onclick="moveToTrash('${book.id}')">지우기</button>
-            </div>
-          </div>
-        `;
-        gridRead.appendChild(card);
-
-      } else if (book.status === 'reading') {
+      if (book.status === 'reading') {
         countReading++;
         card.innerHTML = `
           ${coverSrc}
@@ -465,6 +535,7 @@
       }
     });
 
+    // 3. 🗑️ 휴지통 리스트 렌더링 영역
     if(trashBooks.length === 0) {
       gridTrash.innerHTML = '<p class="empty-text">휴지통이 비어 있습니다. 🍃</p>';
     } else {
@@ -539,16 +610,6 @@
     }
   }
 
-  function changeGoal(e) {
-    e.stopPropagation();
-    const currentGoal = localStorage.getItem('monthlyGoal') || 4;
-    const newGoal = prompt('새로운 한 달 독서 목표 권수를 입력해주세요:', currentGoal);
-    if(newGoal && !isNaN(newGoal) && parseInt(newGoal) > 0) {
-      localStorage.setItem('monthlyGoal', parseInt(newGoal));
-      renderAll();
-    }
-  }
-
   function editBook(id) {
     const book = books.find(b => b.id == id);
     if(!book) return;
@@ -560,6 +621,7 @@
     document.getElementById('form-status').value = book.status;
     document.getElementById('form-title').value = book.title;
     document.getElementById('form-author').value = book.author || '';
+    document.getElementById('form-rating').value = book.rating || "5.0";
     document.getElementById('form-start-date').value = book.startDate || '';
     document.getElementById('form-read-date').value = book.readDate || '';
     document.getElementById('form-quote').value = book.quote || '';
@@ -581,6 +643,58 @@
     }
 
     toggleFormFields();
+  }
+
+  function saveBook(e) {
+    e.preventDefault();
+    const id = document.getElementById('edit-id').value;
+    const status = document.getElementById('form-status').value;
+    const title = document.getElementById('form-title').value;
+    const author = document.getElementById('form-author').value;
+    const rating = document.getElementById('form-rating').value;
+    const startDate = document.getElementById('form-start-date').value;
+    const readDate = document.getElementById('form-read-date').value;
+    const quote = document.getElementById('form-quote').value;
+    const review = document.getElementById('form-review').value;
+    const coverUrl = document.getElementById('form-cover-url').value;
+    
+    const aiContainer = document.getElementById('ai-summary-container');
+    const aiSummary = aiContainer.style.display === 'block' ? document.getElementById('ai-summary-text').innerText : '';
+
+    if(id) {
+      const book = books.find(b => b.id == id);
+      if(book) {
+        book.status = status;
+        book.title = title;
+        book.author = author;
+        book.rating = status === 'read' ? rating : "0.0";
+        book.startDate = startDate;
+        if(status === 'read') book.readDate = readDate;
+        book.quote = quote;
+        book.review = review;
+        book.coverUrl = coverUrl;
+        if(aiSummary && !aiSummary.startsWith('🤖 AI가') && !aiSummary.startsWith('❌ 요약에')) book.aiSummary = aiSummary;
+      }
+    } else {
+      const newBook = {
+        id: Date.now() + Math.random(),
+        status: status,
+        title: title,
+        author: author,
+        rating: status === 'read' ? rating : "0.0",
+        startDate: startDate,
+        readDate: status === 'read' ? readDate : '',
+        quote: status === 'read' ? quote : '',
+        review: status === 'read' ? review : '',
+        coverUrl: coverUrl,
+        aiSummary: (aiSummary && !aiSummary.startsWith('🤖 AI가') && !aiSummary.startsWith('❌ 요약에')) ? aiSummary : ''
+      };
+      books.push(newBook);
+    }
+    
+    document.getElementById('edit-id').value = '';
+    saveData();
+    switchTab(status);
   }
 
   function startReading(id) {
@@ -619,55 +733,6 @@
     }
   }
 
-  function saveBook(e) {
-    e.preventDefault();
-    const id = document.getElementById('edit-id').value;
-    const status = document.getElementById('form-status').value;
-    const title = document.getElementById('form-title').value;
-    const author = document.getElementById('form-author').value;
-    const startDate = document.getElementById('form-start-date').value;
-    const readDate = document.getElementById('form-read-date').value;
-    const quote = document.getElementById('form-quote').value;
-    const review = document.getElementById('form-review').value;
-    const coverUrl = document.getElementById('form-cover-url').value;
-    
-    const aiContainer = document.getElementById('ai-summary-container');
-    const aiSummary = aiContainer.style.display === 'block' ? document.getElementById('ai-summary-text').innerText : '';
-
-    if(id) {
-      const book = books.find(b => b.id == id);
-      if(book) {
-        book.status = status;
-        book.title = title;
-        book.author = author;
-        book.startDate = startDate;
-        if(status === 'read') book.readDate = readDate;
-        book.quote = quote;
-        book.review = review;
-        book.coverUrl = coverUrl;
-        if(aiSummary && !aiSummary.startsWith('🤖 AI가') && !aiSummary.startsWith('❌ 요약에')) book.aiSummary = aiSummary;
-      }
-    } else {
-      const newBook = {
-        id: Date.now() + Math.random(),
-        status: status,
-        title: title,
-        author: author,
-        startDate: startDate,
-        readDate: status === 'read' ? readDate : '',
-        quote: status === 'read' ? quote : '',
-        review: status === 'read' ? review : '',
-        coverUrl: coverUrl,
-        aiSummary: (aiSummary && !aiSummary.startsWith('🤖 AI가') && !aiSummary.startsWith('❌ 요약에')) ? aiSummary : ''
-      };
-      books.push(newBook);
-    }
-    
-    document.getElementById('edit-id').value = '';
-    saveData();
-    switchTab(status);
-  }
-
   function openStatModal(type) {
     const modal = document.getElementById('stat-modal');
     const title = document.getElementById('modal-title');
@@ -688,7 +753,7 @@
               ${b.coverUrl ? `<img src="${b.coverUrl}" style="width:35px; height:auto; border-radius:3px;">` : `<span style="font-size:20px;">📗</span>`}
               <div>
                 <strong>${b.title}</strong> <span style="font-size:12px; color:#666;">(${b.author || '미상'})</span>
-                <div style="font-size:11px; color:var(--forest-light); margin-top:2px;">📅 완독일: ${b.readDate || '-'}</div>
+                <div style="font-size:11px; color:#e74c3c; margin-top:2px;">${getStarsStr(b.rating)} (${b.rating}점)</div>
               </div>
             </div>`;
         });
@@ -727,7 +792,6 @@
       }
     } else if (type === 'graph') {
       title.innerText = '📊 월별 완독 독서량 그래프';
-      
       const monthlyCounts = {};
       books.forEach(b => {
         if(b.status === 'read' && b.readDate) {
@@ -783,6 +847,7 @@
         ${book.coverUrl ? `<img src="${book.coverUrl}" style="width:60px; border-radius:4px; box-shadow:0 2px 5px rgba(0,0,0,0.1);">` : `<div style="font-size:35px;">📗</div>`}
         <div style="flex-grow: 1;">
           <h2 style="color:var(--forest-dark); font-size:16px; margin-bottom:4px;">${book.title}</h2>
+          <div style="font-size:13px; color:#e67e22; font-weight:bold; margin-bottom:2px;">${getStarsStr(book.rating)} (${book.rating}점)</div>
           <p style="font-size:13px; color:#666;">✍️ 저자: ${book.author || '미상'}</p>
           <p style="font-size:12px; color:var(--forest-light);">${dateText}</p>
         </div>
