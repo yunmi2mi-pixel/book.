@@ -208,7 +208,7 @@
 
 <script>
   let books = [];
-  let trashBooks = []; // 🗑️ 휴지통에 들어간 책들을 임시 보관할 별도 배열
+  let trashBooks = [];
 
   function loadData() {
     const localData = localStorage.getItem('books');
@@ -222,7 +222,6 @@
       books = [];
     }
 
-    // 휴지통 데이터 로드
     const localTrash = localStorage.getItem('trashBooks');
     if (localTrash) {
       trashBooks = JSON.parse(localTrash);
@@ -230,7 +229,6 @@
       trashBooks = [];
     }
     
-    // ⏰ 사이트 접속 시 30일이 지난 휴지통 항목들 자동으로 영구 지우기 실행
     checkAndCleanTrash();
 
     const savedKey = localStorage.getItem('gemini_api_key');
@@ -250,12 +248,10 @@
     renderAll();
   }
 
-  // 🕒 30일 만료 계산 및 자동 정리 로직
   function checkAndCleanTrash() {
     const now = Date.now();
-    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000; // 30일을 밀리초로 변환
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
     
-    // 삭제된 지 30일 이내인 책들만 필터링하여 남기기
     const updatedTrash = trashBooks.filter(book => {
       const deletedTime = new Date(book.deletedAt).getTime();
       return (now - deletedTime) < thirtyDaysMs;
@@ -342,6 +338,7 @@
     }
   }
 
+  // 🤖 실제 구글 제미나이 AI 서버와 연동되는 요약 함수 (v1 보완 버전)
   async function generateAIReviewSummary() {
     const apiKey = document.getElementById('ai-api-key').value.trim();
     const reviewText = document.getElementById('form-review').value.trim();
@@ -363,7 +360,8 @@
     summaryText.innerText = '🤖 AI가 독후감을 분석하여 맞춤 요약 노트를 작성하고 있습니다...⏳';
 
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      // 404 에러 방지를 위해 정식 v1 주소로 변경 🛠️
+      const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
       
       const response = await fetch(url, {
         method: 'POST',
@@ -389,7 +387,7 @@
       }
     } catch (err) {
       console.error(err);
-      summaryText.innerText = `❌ 요약에 실패했습니다.\n사유: ${err.message}`;
+      summaryText.innerText = `❌ 요약에 실패했습니다.\n사유: ${err.message}\nAPI 키가 정확한지 다시 확인하거나 잠시 후 다시 시도해 주세요.`;
     }
   }
 
@@ -399,7 +397,7 @@
     const gridRead = document.getElementById('grid-read');
     const gridReading = document.getElementById('grid-reading');
     const gridWish = document.getElementById('grid-wish');
-    const gridTrash = document.getElementById('grid-trash'); // 휴지통 그리드
+    const gridTrash = document.getElementById('grid-trash');
 
     gridRead.innerHTML = '';
     gridReading.innerHTML = '';
@@ -410,7 +408,6 @@
     const thisMonth = new Date().toISOString().slice(0, 7);
     let countMonth = 0;
 
-    // 1. 일반 도서 리스트 출력
     books.forEach(book => {
       const card = document.createElement('div');
       card.className = 'book-card';
@@ -468,7 +465,6 @@
       }
     });
 
-    // 2. 🗑️ 휴지통 리스트 렌더링 영역
     if(trashBooks.length === 0) {
       gridTrash.innerHTML = '<p class="empty-text">휴지통이 비어 있습니다. 🍃</p>';
     } else {
@@ -477,7 +473,6 @@
         card.className = 'book-card';
         const coverSrc = book.coverUrl ? `<img class="book-cover-img" src="${book.coverUrl}" alt="표지">` : `<div class="book-cover-img" style="background:#f2eef0; display:flex; align-items:center; justify-content:center; font-size:24px;">🗑️</div>`;
         
-        // 보관 남은 일수 계산
         const deletedTime = new Date(book.deletedAt).getTime();
         const daysLeft = 30 - Math.floor((Date.now() - deletedTime) / (1000 * 60 * 60 * 24));
 
@@ -496,7 +491,6 @@
       });
     }
 
-    // 상단 네비게이션 권수 동기화
     document.getElementById('tab-btn-read').innerHTML = `📗 완독한 책 <span style="font-size:11px; opacity:0.8;">(${countRead})</span>`;
     document.getElementById('tab-btn-reading').innerHTML = `🌱 읽는 중 <span style="font-size:11px; opacity:0.8;">(${countReading})</span>`;
     document.getElementById('tab-btn-wish').innerHTML = `💚 읽고 싶은 책 <span style="font-size:11px; opacity:0.8;">(${countWish})</span>`;
@@ -515,32 +509,29 @@
     `;
   }
 
-  // 🗑️ 지우기를 눌렀을 때 휴지통으로 날짜와 함께 이동하는 로직
   function moveToTrash(id) {
     if(confirm('이 도서를 휴지통으로 보낼까요? 30일 동안 보관됩니다. 🌿')) {
       const targetIndex = books.findIndex(b => b.id == id);
       if(targetIndex > -1) {
         const deletedBook = books.splice(targetIndex, 1)[0];
-        deletedBook.deletedAt = new Date().toISOString(); // 삭제일 태깅
+        deletedBook.deletedAt = new Date().toISOString();
         trashBooks.push(deletedBook);
         saveData();
       }
     }
   }
 
-  // ↩️ 휴지통에서 다시 내 독서록으로 완벽하게 복구하는 함수
   function restoreBook(id) {
     const targetIndex = trashBooks.findIndex(b => b.id == id);
     if(targetIndex > -1) {
       const restoredBook = trashBooks.splice(targetIndex, 1)[0];
-      delete restoredBook.deletedAt; // 삭제 시간 정보 초기화 제거
+      delete restoredBook.deletedAt;
       books.push(restoredBook);
       saveData();
       alert('독서 리스트로 안전하게 복구되었습니다! ✨');
     }
   }
 
-  // 🔥 휴지통에서 원할 때 완전히 영구히 제거하는 함수
   function permanentlyDeleteBook(id) {
     if(confirm('이 기록은 되돌릴 수 없습니다. 완전히 영구 삭제할까요? ⚠️')) {
       trashBooks = trashBooks.filter(b => b.id != id);
