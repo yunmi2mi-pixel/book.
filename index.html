@@ -64,10 +64,10 @@
     textarea { height: 120px; resize: none; }
     input[type="file"] { padding: 6px; }
 
-    /* AI 설정 입력 칸 스타일 */
+    /* AI 설정 상자 */
     .ai-key-box { background: #f4f7f4; border: 1px dashed var(--forest-light); padding: 10px; border-radius: 8px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
 
-    /* 아늑한 크림색 모달 팝업 🌿 */
+    /* 모달 팝업 */
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; padding: 20px; }
     .modal.active { display: flex; }
     .modal-content { background: var(--bg-cream); border: 3px solid var(--forest-dark); padding: 20px; border-radius: 15px; width: 100%; max-width: 500px; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
@@ -118,11 +118,13 @@
     <button class="tab-btn" onclick="switchTab('reading')" id="tab-btn-reading">🌱 읽는 중</button>
     <button class="tab-btn" onclick="switchTab('wish')" id="tab-btn-wish">💚 읽고 싶은 책</button>
     <button class="tab-btn" onclick="switchTab('form')" id="tab-btn-form">✏️ 책 등록</button>
+    <button class="tab-btn" onclick="switchTab('trash')" id="tab-btn-trash">🗑️ 휴지통</button>
   </div>
 
   <div class="panel active" id="panel-read"><div class="books-grid" id="grid-read"></div></div>
   <div class="panel" id="panel-reading"><div class="books-grid" id="grid-reading"></div></div>
   <div class="panel" id="panel-wish"><div class="books-grid" id="grid-wish"></div></div>
+  <div class="panel" id="panel-trash"><div class="books-grid" id="grid-trash"></div></div>
 
   <div class="panel" id="panel-form">
     <form id="book-form" onsubmit="saveBook(event)">
@@ -179,7 +181,7 @@
         <textarea id="form-review" placeholder="자유롭게 기록을 남겨보세요."></textarea>
         
         <div class="ai-key-box">
-          <label style="font-size: 12px; color: var(--forest-dark); margin: 0;">🔑 나만의 Gemini API Key 입력 (인터넷 노출 없음)</label>
+          <label style="font-size: 12px; color: var(--forest-dark); margin: 0;">🔑 나만의 Gemini API Key 입력 (브라우저 내부에만 안전히 보관)</label>
           <input type="password" id="ai-api-key" placeholder="AIzaSy...로 시작하는 키를 붙여넣으세요" style="padding: 6px; font-size: 12px;">
           <button type="button" class="btn-inline" style="background:#eaf2f8; margin: 0; width: 100%; font-weight: bold;" onclick="generateAIReviewSummary()">🧠 진짜 AI로 3줄 요약하기</button>
         </div>
@@ -206,22 +208,31 @@
 
 <script>
   let books = [];
+  let trashBooks = []; // 🗑️ 휴지통에 들어간 책들을 임시 보관할 별도 배열
 
   function loadData() {
     const localData = localStorage.getItem('books');
     if (localData) {
       books = JSON.parse(localData);
       books.forEach(book => {
-        if (!book.status) {
-          book.status = book.isWish ? 'wish' : 'read';
-        }
+        if (!book.status) book.status = book.isWish ? 'wish' : 'read';
         if (!book.id) book.id = Date.now() + Math.random();
       });
     } else {
       books = [];
     }
+
+    // 휴지통 데이터 로드
+    const localTrash = localStorage.getItem('trashBooks');
+    if (localTrash) {
+      trashBooks = JSON.parse(localTrash);
+    } else {
+      trashBooks = [];
+    }
     
-    // 저장된 API 키가 있다면 불러와서 채워넣기
+    // ⏰ 사이트 접속 시 30일이 지난 휴지통 항목들 자동으로 영구 지우기 실행
+    checkAndCleanTrash();
+
     const savedKey = localStorage.getItem('gemini_api_key');
     if(savedKey && document.getElementById('ai-api-key')) {
       document.getElementById('ai-api-key').value = savedKey;
@@ -230,13 +241,30 @@
 
   function saveData() {
     localStorage.setItem('books', JSON.stringify(books));
+    localStorage.setItem('trashBooks', JSON.stringify(trashBooks));
     
-    // API 키도 로컬에 안전하게 저장
     const keyInput = document.getElementById('ai-api-key').value.trim();
     if(keyInput) {
       localStorage.setItem('gemini_api_key', keyInput);
     }
     renderAll();
+  }
+
+  // 🕒 30일 만료 계산 및 자동 정리 로직
+  function checkAndCleanTrash() {
+    const now = Date.now();
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000; // 30일을 밀리초로 변환
+    
+    // 삭제된 지 30일 이내인 책들만 필터링하여 남기기
+    const updatedTrash = trashBooks.filter(book => {
+      const deletedTime = new Date(book.deletedAt).getTime();
+      return (now - deletedTime) < thirtyDaysMs;
+    });
+
+    if(updatedTrash.length !== trashBooks.length) {
+      trashBooks = updatedTrash;
+      localStorage.setItem('trashBooks', JSON.stringify(trashBooks));
+    }
   }
 
   function switchTab(status) {
@@ -262,7 +290,6 @@
 
   function toggleFormFields() {
     const status = document.getElementById('form-status').value;
-    // 'read'와 'reading' 상태 둘 다 시작일을 입력받을 수 있도록 수정
     document.querySelector('.id-start-date').style.display = (status === 'reading' || status === 'read') ? 'block' : 'none';
     document.querySelector('.id-read-date').style.display = status === 'read' ? 'block' : 'none';
     document.querySelector('.id-quote-field').style.display = status === 'read' ? 'block' : 'none';
@@ -315,7 +342,6 @@
     }
   }
 
-  // 🤖 실제 구글 제미나이 AI 서버와 연동되는 요약 함수
   async function generateAIReviewSummary() {
     const apiKey = document.getElementById('ai-api-key').value.trim();
     const reviewText = document.getElementById('form-review').value.trim();
@@ -337,7 +363,6 @@
     summaryText.innerText = '🤖 AI가 독후감을 분석하여 맞춤 요약 노트를 작성하고 있습니다...⏳';
 
     try {
-      // 구글 제미나이 1.5 플래시 모델 호출 주소
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
       
       const response = await fetch(url, {
@@ -352,18 +377,19 @@
         })
       });
 
+      if (!response.ok) throw new Error(`서버 응답 오류: ${response.status}`);
+
       const resData = await response.json();
       if(resData.candidates && resData.candidates[0].content.parts[0].text) {
         const aiResult = resData.candidates[0].content.parts[0].text.trim();
         summaryText.innerText = aiResult;
-        // 나중에 한 번에 저장할 수 있도록 임시 로컬 공간에 세팅해 둡니다.
         localStorage.setItem('gemini_api_key', apiKey);
       } else {
         throw new Error('올바른 응답 형식이 아닙니다.');
       }
     } catch (err) {
       console.error(err);
-      summaryText.innerText = '❌ 요약에 실패했습니다. API 키가 정확한지, 혹은 인터넷 연결 상태를 확인해 주세요.';
+      summaryText.innerText = `❌ 요약에 실패했습니다.\n사유: ${err.message}`;
     }
   }
 
@@ -373,19 +399,21 @@
     const gridRead = document.getElementById('grid-read');
     const gridReading = document.getElementById('grid-reading');
     const gridWish = document.getElementById('grid-wish');
+    const gridTrash = document.getElementById('grid-trash'); // 휴지통 그리드
 
     gridRead.innerHTML = '';
     gridReading.innerHTML = '';
     gridWish.innerHTML = '';
+    gridTrash.innerHTML = '';
 
     let countRead = 0, countReading = 0, countWish = 0, countQuotes = 0;
     const thisMonth = new Date().toISOString().slice(0, 7);
     let countMonth = 0;
 
+    // 1. 일반 도서 리스트 출력
     books.forEach(book => {
       const card = document.createElement('div');
       card.className = 'book-card';
-
       const coverSrc = book.coverUrl ? `<img class="book-cover-img" src="${book.coverUrl}" alt="표지">` : `<div class="book-cover-img" style="background:#eef3ed; display:flex; align-items:center; justify-content:center; font-size:24px;">📗</div>`;
 
       if (book.status === 'read') {
@@ -393,13 +421,7 @@
         if (book.readDate && book.readDate.startsWith(thisMonth)) countMonth++;
         if (book.quote && book.quote.trim() !== '') countQuotes++;
 
-        // 기간 계산 로직 추가
-        let periodInfo = '';
-        if(book.startDate && book.readDate) {
-          periodInfo = `<br>🌱 기간: ${book.startDate} ~ ${book.readDate}`;
-        } else {
-          periodInfo = `<br>📅 완독일: ${book.readDate || '기록없음'}`;
-        }
+        let periodInfo = book.startDate && book.readDate ? `<br>🌱 기간: ${book.startDate} ~ ${book.readDate}` : `<br>📅 완독일: ${book.readDate || '기록없음'}`;
 
         card.innerHTML = `
           ${coverSrc}
@@ -408,7 +430,7 @@
             <div class="book-info">✍️ ${book.author || '미상'}${periodInfo}</div>
             <div class="card-actions">
               <button class="btn btn-secondary" onclick="viewBookDetail('${book.id}')">📝 독후감 보기</button>
-              <button class="btn btn-danger" onclick="deleteBook('${book.id}')">지우기</button>
+              <button class="btn btn-danger" onclick="moveToTrash('${book.id}')">지우기</button>
             </div>
           </div>
         `;
@@ -423,7 +445,7 @@
             <div class="book-info">✍️ ${book.author || '미상'} <br> 🌱 시작일: ${book.startDate || '기록없음'}</div>
             <div class="card-actions">
               <button class="btn btn-primary" onclick="moveToReadForm('${book.id}')">✅ 완독하기</button>
-              <button class="btn btn-danger" onclick="deleteBook('${book.id}')">지우기</button>
+              <button class="btn btn-danger" onclick="moveToTrash('${book.id}')">지우기</button>
             </div>
           </div>
         `;
@@ -438,7 +460,7 @@
             <div class="book-info">✍️ ${book.author || '미상'}</div>
             <div class="card-actions">
               <button class="btn btn-primary" onclick="startReading('${book.id}')">🌱 읽기 시작</button>
-              <button class="btn btn-danger" onclick="deleteBook('${book.id}')">지우기</button>
+              <button class="btn btn-danger" onclick="moveToTrash('${book.id}')">지우기</button>
             </div>
           </div>
         `;
@@ -446,9 +468,39 @@
       }
     });
 
+    // 2. 🗑️ 휴지통 리스트 렌더링 영역
+    if(trashBooks.length === 0) {
+      gridTrash.innerHTML = '<p class="empty-text">휴지통이 비어 있습니다. 🍃</p>';
+    } else {
+      trashBooks.forEach(book => {
+        const card = document.createElement('div');
+        card.className = 'book-card';
+        const coverSrc = book.coverUrl ? `<img class="book-cover-img" src="${book.coverUrl}" alt="표지">` : `<div class="book-cover-img" style="background:#f2eef0; display:flex; align-items:center; justify-content:center; font-size:24px;">🗑️</div>`;
+        
+        // 보관 남은 일수 계산
+        const deletedTime = new Date(book.deletedAt).getTime();
+        const daysLeft = 30 - Math.floor((Date.now() - deletedTime) / (1000 * 60 * 60 * 24));
+
+        card.innerHTML = `
+          ${coverSrc}
+          <div class="book-content">
+            <div class="book-title" style="color: #888; text-decoration: line-through;">${book.title}</div>
+            <div class="book-info" style="color: var(--soft-clay); font-weight: bold;">⚠️ ${daysLeft}일 후 영구 자동 삭제됨</div>
+            <div class="card-actions">
+              <button class="btn btn-primary" onclick="restoreBook('${book.id}')" style="background: var(--forest-light);">↩️ 복구하기</button>
+              <button class="btn btn-danger" onclick="permanentlyDeleteBook('${book.id}')">즉시 영구삭제</button>
+            </div>
+          </div>
+        `;
+        gridTrash.appendChild(card);
+      });
+    }
+
+    // 상단 네비게이션 권수 동기화
     document.getElementById('tab-btn-read').innerHTML = `📗 완독한 책 <span style="font-size:11px; opacity:0.8;">(${countRead})</span>`;
     document.getElementById('tab-btn-reading').innerHTML = `🌱 읽는 중 <span style="font-size:11px; opacity:0.8;">(${countReading})</span>`;
     document.getElementById('tab-btn-wish').innerHTML = `💚 읽고 싶은 책 <span style="font-size:11px; opacity:0.8;">(${countWish})</span>`;
+    document.getElementById('tab-btn-trash').innerHTML = `🗑️ 휴지통 <span style="font-size:11px; opacity:0.8; color: var(--soft-clay);">(${trashBooks.length})</span>`;
 
     document.getElementById('stat-total').innerText = `${countRead}권`;
     document.getElementById('stat-month').innerText = `${countMonth}권`;
@@ -461,6 +513,39 @@
       <span>📅 이번 달 독서 목표 (${countMonth}/${monthlyGoal}권)</span>
       <span onclick="changeGoal(event)" style="font-size:11px; color:var(--forest-light); text-decoration:underline; cursor:pointer;">[목표 변경]</span>
     `;
+  }
+
+  // 🗑️ 지우기를 눌렀을 때 휴지통으로 날짜와 함께 이동하는 로직
+  function moveToTrash(id) {
+    if(confirm('이 도서를 휴지통으로 보낼까요? 30일 동안 보관됩니다. 🌿')) {
+      const targetIndex = books.findIndex(b => b.id == id);
+      if(targetIndex > -1) {
+        const deletedBook = books.splice(targetIndex, 1)[0];
+        deletedBook.deletedAt = new Date().toISOString(); // 삭제일 태깅
+        trashBooks.push(deletedBook);
+        saveData();
+      }
+    }
+  }
+
+  // ↩️ 휴지통에서 다시 내 독서록으로 완벽하게 복구하는 함수
+  function restoreBook(id) {
+    const targetIndex = trashBooks.findIndex(b => b.id == id);
+    if(targetIndex > -1) {
+      const restoredBook = trashBooks.splice(targetIndex, 1)[0];
+      delete restoredBook.deletedAt; // 삭제 시간 정보 초기화 제거
+      books.push(restoredBook);
+      saveData();
+      alert('독서 리스트로 안전하게 복구되었습니다! ✨');
+    }
+  }
+
+  // 🔥 휴지통에서 원할 때 완전히 영구히 제거하는 함수
+  function permanentlyDeleteBook(id) {
+    if(confirm('이 기록은 되돌릴 수 없습니다. 완전히 영구 삭제할까요? ⚠️')) {
+      trashBooks = trashBooks.filter(b => b.id != id);
+      saveData();
+    }
   }
 
   function changeGoal(e) {
@@ -564,13 +649,12 @@
         book.status = status;
         book.title = title;
         book.author = author;
-        // 완독 상태여도 시작일이 입력되어 있다면 보존
         book.startDate = startDate;
         if(status === 'read') book.readDate = readDate;
         book.quote = quote;
         book.review = review;
         book.coverUrl = coverUrl;
-        if(aiSummary && !aiSummary.startsWith('🤖 AI가')) book.aiSummary = aiSummary;
+        if(aiSummary && !aiSummary.startsWith('🤖 AI가') && !aiSummary.startsWith('❌ 요약에')) book.aiSummary = aiSummary;
       }
     } else {
       const newBook = {
@@ -583,7 +667,7 @@
         quote: status === 'read' ? quote : '',
         review: status === 'read' ? review : '',
         coverUrl: coverUrl,
-        aiSummary: (aiSummary && !aiSummary.startsWith('🤖 AI가')) ? aiSummary : ''
+        aiSummary: (aiSummary && !aiSummary.startsWith('🤖 AI가') && !aiSummary.startsWith('❌ 요약에')) ? aiSummary : ''
       };
       books.push(newBook);
     }
@@ -591,13 +675,6 @@
     document.getElementById('edit-id').value = '';
     saveData();
     switchTab(status);
-  }
-
-  function deleteBook(id) {
-    if(confirm('이 기록을 정말 지우시겠어요? 🌿')) {
-      books = books.filter(b => b.id != id);
-      saveData();
-    }
   }
 
   function openStatModal(type) {
