@@ -54,13 +54,14 @@
     .btn-primary { background: var(--forest-light); color: #fff; }
     .btn-secondary { background: var(--mint); color: var(--forest-dark); }
     .btn-danger { background: var(--soft-clay); color: #fff; }
-    .btn-inline { padding: 8px 12px; margin-top: 6px; background: #eef3ed; color: var(--forest-dark); border: 1px solid var(--mint); width: auto; display: inline-block; text-align: center; border-radius: 6px; font-size: 13px; text-decoration: none; }
+    .btn-inline { padding: 8px 12px; margin-top: 6px; background: #eef3ed; color: var(--forest-dark); border: 1px solid var(--mint); width: auto; display: inline-block; text-align: center; border-radius: 6px; font-size: 13px; text-decoration: none; cursor: pointer; }
 
     /* 등록 폼 */
     .form-group { margin-bottom: 15px; }
     .form-group label { display: block; font-weight: bold; margin-bottom: 5px; color: var(--forest-dark); }
     input, select, textarea { width: 100%; padding: 10px; border: 1px solid var(--mint); border-radius: 8px; font-size: 14px; background: #fff; }
     textarea { height: 120px; resize: none; }
+    input[type="file"] { padding: 6px; }
 
     /* 아늑한 크림색 모달 팝업 🌿 */
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; padding: 20px; }
@@ -139,21 +140,36 @@
       <div class="form-group">
         <label>📖 책 제목</label>
         <input type="text" id="form-title" required>
-        <button type="button" class="btn-inline" onclick="searchBookCover()">🔍 구글에서 표지 검색하기</button>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button type="button" class="btn-inline" onclick="searchBookCover()">🔍 구글에서 표지 검색</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>🖼️ 책 표지 직접 업로드 (선택)</label>
+        <input type="file" id="form-cover-file" accept="image/*" onchange="uploadBookCover(this)">
         
         <div id="cover-preview-container" style="display: none; margin-top: 10px; align-items: center; gap: 10px;">
           <img id="cover-preview" src="" alt="표지 미리보기" style="width: 80px; border-radius: 6px; border: 1px solid var(--mint);">
           <span style="font-size: 13px; color: var(--forest-light); font-weight: bold;">표지가 연동되었습니다! ✨</span>
         </div>
       </div>
+
       <div class="form-group">
         <label>✍️ 저자</label>
         <input type="text" id="form-author">
       </div>
+
+      <div class="form-group id-start-date" style="display: none;">
+        <label>📅 독서 시작일</label>
+        <input type="date" id="form-start-date">
+      </div>
+
       <div class="form-group id-read-date">
         <label>📅 완독일</label>
         <input type="date" id="form-read-date">
       </div>
+
       <div class="form-group id-quote-field">
         <label>✨ 감명 깊었던 말</label>
         <input type="text" id="form-quote" placeholder="기억하고 싶은 문장을 적어보세요.">
@@ -225,6 +241,7 @@
 
   function toggleFormFields() {
     const status = document.getElementById('form-status').value;
+    document.querySelector('.id-start-date').style.display = status === 'reading' ? 'block' : 'none';
     document.querySelector('.id-read-date').style.display = status === 'read' ? 'block' : 'none';
     document.querySelector('.id-quote-field').style.display = status === 'read' ? 'block' : 'none';
     document.querySelector('.id-review-field').style.display = status === 'read' ? 'block' : 'none';
@@ -246,7 +263,6 @@
       .then(res => res.json())
       .then(data => {
         if(data.items && data.items.length > 0 && data.items[0].volumeInfo.imageLinks) {
-          // 구글 보안 주소 썸네일 확보
           let thumb = data.items[0].volumeInfo.imageLinks.thumbnail;
           if (thumb.startsWith('http://')) {
             thumb = thumb.replace('http://', 'https://');
@@ -255,7 +271,7 @@
           previewImg.src = thumb;
           previewContainer.style.display = 'flex';
         } else {
-          alert('표지 이미지를 찾을 수 없습니다 😢 기본 아이콘으로 등록됩니다.');
+          alert('표지 이미지를 찾을 수 없습니다 😢 직접 업로드 기능을 이용해 보세요!');
           coverUrlInput.value = '';
           previewContainer.style.display = 'none';
         }
@@ -266,7 +282,20 @@
       });
   }
 
-  // AI 3줄 요약 모의(시뮬레이션) 연동 기능 🧠
+  // 📂 내 기기의 이미지 파일을 읽어서 등록하는 함수
+  function uploadBookCover(input) {
+    if (input.files && input.files[0]) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('form-cover-url').value = e.target.result;
+        document.getElementById('cover-preview').src = e.target.result;
+        document.getElementById('cover-preview-container').style.display = 'flex';
+      };
+      reader.readAsDataURL(input.files[0]);
+    }
+  }
+
+  // AI 3줄 요약 모의 연동 기능 🧠
   function generateAIReviewSummary() {
     const reviewText = document.getElementById('form-review').value.trim();
     if(!reviewText || reviewText.length < 10) {
@@ -277,7 +306,6 @@
     const summaryContainer = document.getElementById('ai-summary-container');
     const summaryText = document.getElementById('ai-summary-text');
 
-    // 핵심 단어를 추출하는 척하는 지능형 모의 엔진
     const keywords = [];
     if(reviewText.includes('주식') || reviewText.includes('투자')) keywords.push('📈 올바른 재테크와 경제적 가치관에 대한 고찰');
     if(reviewText.includes('마음') || reviewText.includes('생각') || reviewText.includes('위로')) keywords.push('🌿 내면을 돌보고 따뜻한 위로를 얻어가는 과정');
@@ -306,7 +334,6 @@
       const card = document.createElement('div');
       card.className = 'book-card';
 
-      // 책 표지 이미지 기본 배치 (없을 경우 이모지 아이콘 대체)
       const coverSrc = book.coverUrl ? `<img class="book-cover-img" src="${book.coverUrl}" alt="표지">` : `<div class="book-cover-img" style="background:#eef3ed; display:flex; align-items:center; justify-content:center; font-size:24px;">📗</div>`;
 
       if (book.status === 'read') {
@@ -375,9 +402,18 @@
   function startReading(id) {
     const book = books.find(b => b.id == id);
     if(book) {
-      book.status = 'reading';
-      book.startDate = new Date().toISOString().slice(0, 10);
-      saveData();
+      switchTab('form');
+      document.getElementById('form-status').value = 'reading';
+      document.getElementById('edit-id').value = book.id;
+      document.getElementById('form-title').value = book.title;
+      document.getElementById('form-author').value = book.author || '';
+      document.getElementById('form-cover-url').value = book.coverUrl || '';
+      if(book.coverUrl) {
+        document.getElementById('cover-preview').src = book.coverUrl;
+        document.getElementById('cover-preview-container').style.display = 'flex';
+      }
+      document.getElementById('form-start-date').value = new Date().toISOString().slice(0, 10);
+      toggleFormFields();
     }
   }
 
@@ -405,12 +441,12 @@
     const status = document.getElementById('form-status').value;
     const title = document.getElementById('form-title').value;
     const author = document.getElementById('form-author').value;
+    const startDate = document.getElementById('form-start-date').value;
     const readDate = document.getElementById('form-read-date').value;
     const quote = document.getElementById('form-quote').value;
     const review = document.getElementById('form-review').value;
     const coverUrl = document.getElementById('form-cover-url').value;
     
-    // AI 요약이 생성되어 있는지 확인 후 데이터 바인딩
     const aiContainer = document.getElementById('ai-summary-container');
     const aiSummary = aiContainer.style.display === 'block' ? document.getElementById('ai-summary-text').innerText : '';
 
@@ -420,7 +456,8 @@
         book.status = status;
         book.title = title;
         book.author = author;
-        book.readDate = readDate;
+        if(status === 'reading') book.startDate = startDate;
+        if(status === 'read') book.readDate = readDate;
         book.quote = quote;
         book.review = review;
         book.coverUrl = coverUrl;
@@ -432,8 +469,8 @@
         status: status,
         title: title,
         author: author,
+        startDate: status === 'reading' ? startDate : '',
         readDate: status === 'read' ? readDate : '',
-        startDate: status === 'reading' ? new Date().toISOString().slice(0, 10) : '',
         quote: status === 'read' ? quote : '',
         review: status === 'read' ? review : '',
         coverUrl: coverUrl,
