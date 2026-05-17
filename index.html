@@ -64,6 +64,9 @@
     textarea { height: 120px; resize: none; }
     input[type="file"] { padding: 6px; }
 
+    /* AI 설정 입력 칸 스타일 */
+    .ai-key-box { background: #f4f7f4; border: 1px dashed var(--forest-light); padding: 10px; border-radius: 8px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
+
     /* 아늑한 크림색 모달 팝업 🌿 */
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; padding: 20px; }
     .modal.active { display: flex; }
@@ -156,7 +159,7 @@
         <input type="text" id="form-author">
       </div>
 
-      <div class="form-group id-start-date" style="display: none;">
+      <div class="form-group id-start-date">
         <label>📅 독서 시작일</label>
         <input type="date" id="form-start-date">
       </div>
@@ -170,10 +173,16 @@
         <label>✨ 감명 깊었던 말</label>
         <input type="text" id="form-quote" placeholder="기억하고 싶은 문장을 적어보세요.">
       </div>
+      
       <div class="form-group id-review-field">
         <label>📝 독후감 / 느낀 점</label>
         <textarea id="form-review" placeholder="자유롭게 기록을 남겨보세요."></textarea>
-        <button type="button" class="btn-inline" style="background:#eaf2f8;" onclick="generateAIReviewSummary()">🧠 AI 3줄 요약하기</button>
+        
+        <div class="ai-key-box">
+          <label style="font-size: 12px; color: var(--forest-dark); margin: 0;">🔑 나만의 Gemini API Key 입력 (인터넷 노출 없음)</label>
+          <input type="password" id="ai-api-key" placeholder="AIzaSy...로 시작하는 키를 붙여넣으세요" style="padding: 6px; font-size: 12px;">
+          <button type="button" class="btn-inline" style="background:#eaf2f8; margin: 0; width: 100%; font-weight: bold;" onclick="generateAIReviewSummary()">🧠 진짜 AI로 3줄 요약하기</button>
+        </div>
         
         <div id="ai-summary-container" style="display: none; margin-top: 10px; background: #fff; border: 2px dashed var(--mint); padding: 12px; border-radius: 8px;">
           <div style="font-weight: bold; color: var(--forest-dark); font-size: 13px; margin-bottom: 5px;">🤖 AI가 요약한 핵심 노트</div>
@@ -211,10 +220,22 @@
     } else {
       books = [];
     }
+    
+    // 저장된 API 키가 있다면 불러와서 채워넣기
+    const savedKey = localStorage.getItem('gemini_api_key');
+    if(savedKey && document.getElementById('ai-api-key')) {
+      document.getElementById('ai-api-key').value = savedKey;
+    }
   }
 
   function saveData() {
     localStorage.setItem('books', JSON.stringify(books));
+    
+    // API 키도 로컬에 안전하게 저장
+    const keyInput = document.getElementById('ai-api-key').value.trim();
+    if(keyInput) {
+      localStorage.setItem('gemini_api_key', keyInput);
+    }
     renderAll();
   }
 
@@ -231,13 +252,18 @@
       document.getElementById('form-cover-url').value = '';
       document.getElementById('cover-preview-container').style.display = 'none';
       document.getElementById('ai-summary-container').style.display = 'none';
+      
+      const savedKey = localStorage.getItem('gemini_api_key');
+      if(savedKey) document.getElementById('ai-api-key').value = savedKey;
+      
       toggleFormFields();
     }
   }
 
   function toggleFormFields() {
     const status = document.getElementById('form-status').value;
-    document.querySelector('.id-start-date').style.display = status === 'reading' ? 'block' : 'none';
+    // 'read'와 'reading' 상태 둘 다 시작일을 입력받을 수 있도록 수정
+    document.querySelector('.id-start-date').style.display = (status === 'reading' || status === 'read') ? 'block' : 'none';
     document.querySelector('.id-read-date').style.display = status === 'read' ? 'block' : 'none';
     document.querySelector('.id-quote-field').style.display = status === 'read' ? 'block' : 'none';
     document.querySelector('.id-review-field').style.display = status === 'read' ? 'block' : 'none';
@@ -289,23 +315,56 @@
     }
   }
 
-  function generateAIReviewSummary() {
+  // 🤖 실제 구글 제미나이 AI 서버와 연동되는 요약 함수
+  async function generateAIReviewSummary() {
+    const apiKey = document.getElementById('ai-api-key').value.trim();
     const reviewText = document.getElementById('form-review').value.trim();
+    const title = document.getElementById('form-title').value.trim();
+
+    if(!apiKey) {
+      alert('🔑 발급받으신 Gemini API Key를 입력창에 먼저 붙여넣어 주세요!');
+      return;
+    }
     if(!reviewText || reviewText.length < 10) {
-      alert('독후감을 최소 10자 이상 자세히 적어주셔야 요약이 가능합니다! 📝');
+      alert('📝 독후감을 최소 10자 이상 적어주셔야 분석이 가능합니다!');
       return;
     }
 
     const summaryContainer = document.getElementById('ai-summary-container');
     const summaryText = document.getElementById('ai-summary-text');
-
-    const keywords = [];
-    if(reviewText.includes('주식') || reviewText.includes('투자')) keywords.push('📈 올바른 재테크와 경제적 가치관에 대한 고찰');
-    if(reviewText.includes('마음') || reviewText.includes('생각') || reviewText.includes('위로')) keywords.push('🌿 내면을 돌보고 따뜻한 위로를 얻어가는 과정');
-    if(keywords.length === 0) keywords.push('📖 책 속 문장들이 주는 삶의 지혜와 지식의 발견');
-
-    summaryText.innerText = `1. ${keywords[0]}\n2. 저자의 경험을 통해 복잡한 개념을 쉽게 이해하고 적용할 지점을 찾음.\n3. 독자 스스로의 삶이나 습관을 되돌아보게 만드는 깊이 있는 도서.`;
+    
     summaryContainer.style.display = 'block';
+    summaryText.innerText = '🤖 AI가 독후감을 분석하여 맞춤 요약 노트를 작성하고 있습니다...⏳';
+
+    try {
+      // 구글 제미나이 1.5 플래시 모델 호출 주소
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: `사용자가 작성한 도서 《${title}》의 독후감을 분석하여 핵심 내용을 친절하고 다정한 어조로 딱 3줄 요약해줘. 각 줄의 시작에는 번호(1., 2., 3.)를 붙이고 줄바꿈을 해줘. 다른 설명은 제외하고 딱 3줄 요약 결과만 보내줘.\n\n[사용자 독후감]:\n${reviewText}`
+            }]
+          }]
+        })
+      });
+
+      const resData = await response.json();
+      if(resData.candidates && resData.candidates[0].content.parts[0].text) {
+        const aiResult = resData.candidates[0].content.parts[0].text.trim();
+        summaryText.innerText = aiResult;
+        // 나중에 한 번에 저장할 수 있도록 임시 로컬 공간에 세팅해 둡니다.
+        localStorage.setItem('gemini_api_key', apiKey);
+      } else {
+        throw new Error('올바른 응답 형식이 아닙니다.');
+      }
+    } catch (err) {
+      console.error(err);
+      summaryText.innerText = '❌ 요약에 실패했습니다. API 키가 정확한지, 혹은 인터넷 연결 상태를 확인해 주세요.';
+    }
   }
 
   function renderAll() {
@@ -334,11 +393,19 @@
         if (book.readDate && book.readDate.startsWith(thisMonth)) countMonth++;
         if (book.quote && book.quote.trim() !== '') countQuotes++;
 
+        // 기간 계산 로직 추가
+        let periodInfo = '';
+        if(book.startDate && book.readDate) {
+          periodInfo = `<br>🌱 기간: ${book.startDate} ~ ${book.readDate}`;
+        } else {
+          periodInfo = `<br>📅 완독일: ${book.readDate || '기록없음'}`;
+        }
+
         card.innerHTML = `
           ${coverSrc}
           <div class="book-content">
             <div class="book-title">${book.title}</div>
-            <div class="book-info">✍️ ${book.author || '미상'} | 📅 완독: ${book.readDate || '기록없음'}</div>
+            <div class="book-info">✍️ ${book.author || '미상'}${periodInfo}</div>
             <div class="card-actions">
               <button class="btn btn-secondary" onclick="viewBookDetail('${book.id}')">📝 독후감 보기</button>
               <button class="btn btn-danger" onclick="deleteBook('${book.id}')">지우기</button>
@@ -387,7 +454,6 @@
     document.getElementById('stat-month').innerText = `${countMonth}권`;
     document.getElementById('stat-quotes').innerText = `${countQuotes}개`;
 
-    // 한 달 목표 동적 설정 불러오기 (기본값 4권)
     const monthlyGoal = parseInt(localStorage.getItem('monthlyGoal')) || 4;
     const progressPercent = Math.min((countMonth / monthlyGoal) * 100, 100);
     document.getElementById('progress-fill').style.width = `${progressPercent}%`;
@@ -397,7 +463,6 @@
     `;
   }
 
-  // ✏️ 목표 권수를 동적으로 변경하는 함수
   function changeGoal(e) {
     e.stopPropagation();
     const currentGoal = localStorage.getItem('monthlyGoal') || 4;
@@ -499,12 +564,13 @@
         book.status = status;
         book.title = title;
         book.author = author;
-        if(status === 'reading') book.startDate = startDate;
+        // 완독 상태여도 시작일이 입력되어 있다면 보존
+        book.startDate = startDate;
         if(status === 'read') book.readDate = readDate;
         book.quote = quote;
         book.review = review;
         book.coverUrl = coverUrl;
-        if(aiSummary) book.aiSummary = aiSummary;
+        if(aiSummary && !aiSummary.startsWith('🤖 AI가')) book.aiSummary = aiSummary;
       }
     } else {
       const newBook = {
@@ -512,12 +578,12 @@
         status: status,
         title: title,
         author: author,
-        startDate: status === 'reading' ? startDate : '',
+        startDate: startDate,
         readDate: status === 'read' ? readDate : '',
         quote: status === 'read' ? quote : '',
         review: status === 'read' ? review : '',
         coverUrl: coverUrl,
-        aiSummary: aiSummary
+        aiSummary: (aiSummary && !aiSummary.startsWith('🤖 AI가')) ? aiSummary : ''
       };
       books.push(newBook);
     }
@@ -592,13 +658,12 @@
         });
       }
     } else if (type === 'graph') {
-      // 📊 월별 독서량 막대그래프 동적 생성 로직
       title.innerText = '📊 월별 완독 독서량 그래프';
       
       const monthlyCounts = {};
       books.forEach(b => {
         if(b.status === 'read' && b.readDate) {
-          const monthStr = b.readDate.slice(0, 7); // YYYY-MM 추출
+          const monthStr = b.readDate.slice(0, 7);
           monthlyCounts[monthStr] = (monthlyCounts[monthStr] || 0) + 1;
         }
       });
@@ -612,7 +677,7 @@
         
         months.forEach(m => {
           const count = monthlyCounts[m];
-          const barHeight = (count / maxCount) * 130; // 최대 높이 비율 제한
+          const barHeight = (count / maxCount) * 130;
           const displayMonth = m.split('-')[1] + '월';
           
           graphHtml += `
@@ -640,13 +705,18 @@
     modal.classList.add('active');
     title.innerText = '📖 나의 독서 기록장 상세';
 
+    let dateText = `📅 완독일: ${book.readDate || '-'}`;
+    if(book.startDate && book.readDate) {
+      dateText = `📅 기간: ${book.startDate} ~ ${book.readDate}`;
+    }
+
     body.innerHTML = `
       <div style="display:flex; gap:15px; margin-bottom:15px; align-items:center; background:#fff; padding:12px; border-radius:10px; border:1px solid var(--mint);">
         ${book.coverUrl ? `<img src="${book.coverUrl}" style="width:60px; border-radius:4px; box-shadow:0 2px 5px rgba(0,0,0,0.1);">` : `<div style="font-size:35px;">📗</div>`}
         <div style="flex-grow: 1;">
           <h2 style="color:var(--forest-dark); font-size:16px; margin-bottom:4px;">${book.title}</h2>
           <p style="font-size:13px; color:#666;">✍️ 저자: ${book.author || '미상'}</p>
-          <p style="font-size:12px; color:var(--forest-light);">📅 완독일: ${book.readDate || '-'}</p>
+          <p style="font-size:12px; color:var(--forest-light);">${dateText}</p>
         </div>
         <button class="btn btn-primary" onclick="editBook('${book.id}')" style="background:var(--forest-dark); padding: 8px 10px;">✏️ 수정</button>
       </div>
